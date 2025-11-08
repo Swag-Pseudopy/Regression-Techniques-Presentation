@@ -2,14 +2,9 @@
 
 ### **Author:**
 
-Supratim Das\n
-Roll No. - MB2532\n
-M.Stat. I, Indian Statistical Institute, Kolkata\n
-\n
-Swagato Das
-Roll No. - MB2534
+Supratim Das, Swagato Das
+Roll No.(s) - MB2532, MB2534
 M.Stat. I, Indian Statistical Institute, Kolkata
-
 *Course:* Regression Techniques — Presentation Project (2025)
 
 ---
