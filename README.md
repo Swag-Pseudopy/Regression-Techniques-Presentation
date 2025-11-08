@@ -1,11 +1,12 @@
 # **Regression Techniques Demonstration: PCR, LASSO, Group LASSO, and Fused LASSO**
 
-### **Author:**
+### **Author**
 
-Supratim Das, Swagato Das
-Roll No.(s) - MB2532, MB2534
-M.Stat. I, Indian Statistical Institute, Kolkata
-*Course:* Regression Techniques — Presentation Project (2025)
+Supratim Das, Swagato Das  
+**Roll No(s):** MB2532, MB2534  
+**M.Stat. I**, Indian Statistical Institute, Kolkata  
+**Course:** Regression Techniques — Presentation Project (2025)
+
 
 ---
 
@@ -51,7 +52,7 @@ Instead of penalizing large coefficients (as in LASSO), it penalizes **large dif
 
 Mathematically, for an image ( x ), TV regularization minimizes:
 
-\[\min_{x} \; \frac{1}{2} \|y - x\|_2^2 \;+\; \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| \;+\; |x_{i,j} - x_{i,j+1}| \Big)\]
+$$\min_{x} \; \frac{1}{2} \|y - x\|_2^2 \;+\; \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| \;+\; |x_{i,j} - x_{i,j+1}| \Big)$$
 
 This encourages **spatial smoothness** while **preserving sharp edges**, unlike classical Gaussian smoothing which blurs boundaries.
 In essence:
