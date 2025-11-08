@@ -2,10 +2,10 @@
 
 ### **Author:**
 
-Supratim Das
-Roll No. - MB2532
-M.Stat. I, Indian Statistical Institute, Kolkata
-
+Supratim Das\n
+Roll No. - MB2532\n
+M.Stat. I, Indian Statistical Institute, Kolkata\n
+\n
 Swagato Das
 Roll No. - MB2534
 M.Stat. I, Indian Statistical Institute, Kolkata
@@ -56,7 +56,7 @@ Instead of penalizing large coefficients (as in LASSO), it penalizes **large dif
 
 Mathematically, for an image ( x ), TV regularization minimizes:
 
-$[\min_x ; \frac{1}{2} |y - x|*2^2 + \lambda \sum*{i,j} |x_{i,j} - x_{i+1,j}| + |x_{i,j} - x_{i,j+1}|]$
+\[\min_{x} \; \frac{1}{2} \|y - x\|_2^2 \;+\; \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| \;+\; |x_{i,j} - x_{i,j+1}| \Big)\]
 
 This encourages **spatial smoothness** while **preserving sharp edges**, unlike classical Gaussian smoothing which blurs boundaries.
 In essence:
