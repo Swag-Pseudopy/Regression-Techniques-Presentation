@@ -52,7 +52,7 @@ Instead of penalizing large coefficients (as in LASSO), it penalizes **large dif
 
 Mathematically, for an image ( x ), TV regularization minimizes:
 
-$$\min_{x} \; \frac{1}{2} \|y - x\|_2^2 \;+\; \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| \;+\; |x_{i,j} - x_{i,j+1}| \Big)$$
+$$\min_{x}  \frac{1}{2} \|y - x\|_2^2 + \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| + |x_{i,j} - x_{i,j+1}| \Big)$$
 
 This encourages **spatial smoothness** while **preserving sharp edges**, unlike classical Gaussian smoothing which blurs boundaries.
 In essence:
