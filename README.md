@@ -60,6 +60,20 @@ Mathematically, for an image ( x ), TV regularization minimizes:
 \min_x ; \frac{1}{2} |y - x|*2^2 + \lambda \sum*{i,j} |x_{i,j} - x_{i+1,j}| + |x_{i,j} - x_{i,j+1}|
 ]
 
+### **Total Variation–Style Smoothing**
+
+In the 2D Fused LASSO (Total Variation) framework, we estimate a smooth version of an image \( x \) from noisy observations \( y \) by solving:
+
+\[
+\min_{x} \; \frac{1}{2} \|y - x\|_2^2 
+\;+\; \lambda \sum_{i,j} \Big( |x_{i,j} - x_{i+1,j}| \;+\; |x_{i,j} - x_{i,j+1}| \Big)
+\]
+
+- The first term \( \frac{1}{2}\|y - x\|_2^2 \) enforces **fidelity** to the observed data.  
+- The second term penalizes **differences between neighboring pixels**, encouraging **spatial smoothness** while preserving sharp edges.
+
+This is known as **Total Variation (TV) denoising**, a special case of the **Fused LASSO** penalty.
+
 This encourages **spatial smoothness** while **preserving sharp edges**, unlike classical Gaussian smoothing which blurs boundaries.
 In essence:
 
