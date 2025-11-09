@@ -107,7 +107,8 @@ Together, these illustrate the evolution of regression from coefficient shrinkag
 ## **References**
 
 1. Hastie, T., Tibshirani, R., & Friedman, J. (2009). *The Elements of Statistical Learning*.
-2. Zou, H., & Hastie, T. (2005). *Regularization and Variable Selection via the Elastic Net*.
-3. Yuan, M., & Lin, Y. (2006). *Model Selection and Estimation in Regression with Grouped Variables*.
-4. Tibshirani, R. et al. (2011). *Solution Paths for Generalized LASSO Problems*.
-5. Arnold, T. B. et al. (2011). *Efficient Implementations of the Generalized Lasso Dual Path Algorithm*.
+2. Tibshirani, R. (1996). *Regression Shrinkage and Selection via the Lasso*.
+3. Zou, H., & Hastie, T. (2005). *Regularization and Variable Selection via the Elastic Net*.
+4. Yuan, M., & Lin, Y. (2006). *Model Selection and Estimation in Regression with Grouped Variables*.
+5. Tibshirani, R. et al. (2011). *Solution Paths for Generalized LASSO Problems*.
+6. Arnold, T. B. et al. (2011). *Efficient Implementations of the Generalized Lasso Dual Path Algorithm*.
