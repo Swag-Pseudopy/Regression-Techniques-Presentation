@@ -1,60 +1,70 @@
-# PCR_LASSO_GroupFused_R.R
-# -------------------------------------------------------------
-# Title: PCR, LASSO (glmnet), Group LASSO (gglasso), and 2D Fused LASSO (genlasso)
-# Author: Generated for user — revised to use established packages where appropriate
-# Date: 2025-11-08
-# Purpose: Self-contained R script demonstrating PCR, LASSO, Group LASSO,
-#          and 2D fused-lasso (image denoising) on simulated data.
-#          Uses widely used CRAN packages: glmnet, gglasso, genlasso, pls, imager.
-# -------------------------------------------------------------
-# Usage:
-# - Run the whole script in an R environment (R kernel in Colab, RStudio, etc.)
-# - Install required packages if missing (see section below).
-# - Follow the examples at the bottom to test each method.
-#
-# Notes:
-# - LASSO & cross-validated lambda use glmnet::cv.glmnet.
-# - Group LASSO uses gglasso::gglasso (block penalty by groups).
-# - PCR uses pls::pcr with built-in cross-validation.
-# - Fused LASSO (2D image denoising) uses genlasso::fusedlasso with a 2D
-#   finite-difference operator assembled as a sparse matrix.
-# - This script focuses on clarity and reproducibility for use in Colab.
-#
-# ------------------------------------------------------------------
-# Dependencies (install if missing):
-# install.packages(c('glmnet','gglasso','genlasso','pls','Matrix','imager'))
-# ------------------------------------------------------------------
-
-# ---------------------- Utilities ---------------------------------
 mse <- function(y, yhat) mean((y - yhat)^2)
+#install.packages(c('glmnet','gglasso','genlasso','pls','Matrix','imager'))
 
-# ------------------- Simulate data --------------------------------
-simulate_regression <- function(n = 200, p = 50, s = 5, sigma = 1, seed = 1) {
+# Generating data
+Data_generation <- function(n = 200, p = 20, s = 7, sigma = 1, seed = 1) {
   set.seed(seed)
+  # Sets the seed for random number generation. This ensures that if you run
+  # the function with the same seed, you will get the exact same simulated data
+  # each time.
+
   X <- matrix(rnorm(n * p), n, p)
+
+  beta_vec <- rep(0, p) #true beta
+
+  beta_vec[1:s] <- seq(from = 2, length.out = s, by = -0.3)
+  # This means only the first 's' predictors in X will have a non-zero effect on y.
+
+  y <- X %*% beta_vec + rnorm(n, sd = sigma)
+  # The error is added to the linear combination to get the final response 'y'.
+
+  list(X = X, y = as.numeric(y), beta = beta_vec)
+  # Returns a list containing the generated data and the true coefficients:
+  # X: the predictor matrix
+  # y: the response vector (converted to a numeric vector using as.numeric)
+  # beta: the true coefficient vector
+}
+
+Data_generation_grouped <- function(n = 200,
+                                    n_groups = 20,
+                                    group_size = 3,
+                                    n_active = 5,
+                                    coef_mag = function(k) seq(from = 2, length.out = k, by = -0.3),
+                                    sigma = 1,
+                                    seed = 1) {
+  set.seed(seed)
+  # Build group sizes
+  if (length(group_size) == 1) {
+    group_size <- rep(group_size, n_groups)
+  } else {
+    if (length(group_size) != n_groups) stop("group_size length must equal n_groups")
+  }
+  p <- sum(group_size)
+  # design matrix
+  X <- matrix(rnorm(n * p), nrow = n, ncol = p)
+  # groups vector: length p, values 1..n_groups
+  groups <- rep(seq_len(n_groups), times = group_size)
+  # true beta: group-sparse
   beta <- rep(0, p)
-  beta[1:s] <- seq(from = 2, length.out = s, by = -0.3)
-  y <- X %*% beta + rnorm(n, sd = sigma)
-  list(X = X, y = as.numeric(y), beta = beta)
-}
-
-# -------------------- Principal Component Regression --------------
-# Uses pls::pcr which has internal cross-validation
-pcr_example <- function(X, y, ncomp = 10, validation = "CV") {
-  if (!requireNamespace('pls', quietly = TRUE)) stop('Install package pls')
-  library(pls)
-  # center & scale performed inside pcr if scale = TRUE
-  fit <- pcr(y ~ X, ncomp = ncomp, data = as.data.frame(X), scale = TRUE, validation = validation)
-  # choose ncomp by CV
-  cv <- RMSEP(fit)
-  # pick minimum CV (ignoring "adj" components if present)
-  ncomp_opt <- which.min(cv$val[1,1, ]) - 1 # RMSEP returns with 0 comps at index 1
-  if (ncomp_opt < 1) ncomp_opt <- 1
-  list(fit = fit, ncomp_opt = ncomp_opt)
-}
-
-pcr_predict <- function(pcr_obj, Xnew) {
-  predict(pcr_obj$fit, newdata = as.data.frame(Xnew), ncomp = pcr_obj$ncomp_opt)
+  active_groups <- sample(seq_len(n_groups), n_active)
+  # assign coefficients within each active group
+  for (g in active_groups) {
+    idxs <- which(groups == g)
+    k <- length(idxs)
+    if (is.function(coef_mag)) {
+      vals <- coef_mag(k)
+      # if returned length differs, recycle/truncate
+      vals <- rep(vals, length.out = k)
+    } else if (length(coef_mag) == 1) {
+      vals <- rep(coef_mag, k)
+    } else {
+      vals <- rep(coef_mag, length.out = k)
+    }
+    beta[idxs] <- vals
+  }
+  # response
+  y <- as.numeric(X %*% beta + rnorm(n, sd = sigma))
+  list(X = X, y = y, beta = beta, groups = groups, active_groups = active_groups)
 }
 
 # -------------------- LASSO via glmnet -----------------------------
@@ -68,31 +78,82 @@ lasso_glmnet <- function(X, y, nfolds = 5, alpha = 1) {
   coef_vec <- as.numeric(coef(cvfit, s = "lambda.min")) # includes intercept at index 1
   intercept <- coef_vec[1]
   beta <- coef_vec[-1]
-  list(cvfit = cvfit, lambda_min = lambda_min, intercept = intercept, beta = beta)
+  list(cvfit = cvfit, lambda_min = lambda_min, intercept = intercept, beta = beta,summary=summary(cvfit))
 }
 
 predict_lasso_glmnet <- function(fit, Xnew) {
   predict(fit$cvfit, newx = Xnew, s = "lambda.min")
 }
 
-# -------------------- Group LASSO via gglasso ----------------------
-# groups: integer vector of length p assigning each variable to a group
+L=Data_generation(n=1000)
+Scaled_X=scale(L$X, center = TRUE, scale = TRUE)
+model=lasso_glmnet(X=Scaled_X,y=L$y)
+cat("Estimated beta: ",model$beta,"\n")
+cat("True beta: ", L$beta,"\n")
+cat("MSE: ",mse(predict_lasso_glmnet(model,Scaled_X),L$y))
+
+###############################################################################
+# Group LASSO (gglasso) demo — shows number of true vs selected active groups
+###############################################################################
+
+# -------------------- Group LASSO via gglasso --------------------
 group_lasso_gglasso <- function(X, y, groups, nfolds = 5) {
-  if (!requireNamespace('gglasso', quietly = TRUE)) stop('Install package gglasso')
+  if (!requireNamespace("gglasso", quietly = TRUE)) install.packages("gglasso")
   library(gglasso)
   stopifnot(length(groups) == ncol(X))
-  # gglasso wants X, y, group, loss = "ls"
-  cvfit <- cv.gglasso(x = X, y = y, group = groups, loss = "ls", nfolds = nfolds)
+  
+  n <- nrow(X)
+  if (nfolds >= n) {
+    nfolds <- max(2, n)
+    message("Adjusted nfolds to ", nfolds)
+  }
+  
+  x_scaled <- scale(X, center = TRUE, scale = TRUE)
+  cvfit <- cv.gglasso(x = x_scaled, y = y, group = groups, loss = "ls", nfolds = nfolds)
   lambda_min <- cvfit$lambda.min
+  
   beta_full <- coef(cvfit, s = "lambda.min")
   intercept <- as.numeric(beta_full[1])
   beta <- as.numeric(beta_full[-1])
-  list(cvfit = cvfit, lambda_min = lambda_min, intercept = intercept, beta = beta)
+  
+  y_hat <- as.numeric(predict(cvfit, x_scaled, s = "lambda.min"))
+  
+  list(cvfit = cvfit,
+       lambda_min = lambda_min,
+       intercept = intercept,
+       beta = beta,
+       mse = mse(y, y_hat))
 }
 
-predict_group_gglasso <- function(fit, Xnew) {
-  predict(fit$cvfit, newx = Xnew, s = "lambda.min")
+example_group_lasso <- function(dat, nfolds = 5, tol = 1e-8) {
+  res <- group_lasso_gglasso(dat$X, dat$y, groups = dat$groups, nfolds = nfolds)
+  
+  uniqg <- sort(unique(dat$groups))
+  nz_groups <- sapply(uniqg, function(g) any(abs(res$beta[dat$groups == g]) > tol))
+  selected_groups <- uniqg[nz_groups]
+  
+  cat("\n===== Group LASSO Summary =====\n")
+  cat("Lambda chosen:", res$lambda_min, "\n")
+  cat("Training MSE:", res$mse, "\n\n")
+  
+  cat("True active groups:     ", dat$active_groups, "\n")
+  cat("Selected active groups: ", selected_groups, "\n\n")
+  cat("Number of true active groups:     ", length(dat$active_groups), "\n")
+  cat("Number of groups selected by model:", length(selected_groups), "\n")
+  cat("Overlap (true ∩ selected):        ", sum(selected_groups %in% dat$active_groups), "\n")
+  
 }
+
+dat <- Data_generation_grouped(
+  n = 10000,          # sample size
+  n_groups = 20,    # total groups
+  group_size = 2,   # vars per group
+  n_active = 5,     # number of truly active groups
+  sigma = 1,
+  seed = 14,
+)
+
+out <- example_group_lasso(dat, nfolds = 5)
 
 # -------------------- Fused LASSO on 2D image using genlasso -------
 # We will use genlasso::fusedlasso with a difference matrix D constructed for 2D.
@@ -132,7 +193,7 @@ build_diff_ops_sparse <- function(nr, nc) {
   D
 }
 
-fused_lasso_genlasso <- function(y_image, lambda = NULL, nlambda = 50) {
+fused_lasso_genlasso <- function(y_image, lambda = 0, nlambda = 50) {
   if (!requireNamespace('genlasso', quietly = TRUE)) stop('Install package genlasso')
   library(genlasso)
   nr <- nrow(y_image); nc <- ncol(y_image); N <- nr * nc
@@ -154,7 +215,6 @@ fused_lasso_genlasso <- function(y_image, lambda = NULL, nlambda = 50) {
   list(fit = fit, idx = idx, x = x_hat, x_img = x_img, lambda_used = fit$lambda[idx])
 }
 
-# -------------------- Image import helper -------------------------
 import_image_gray <- function(path, target_dim = NULL) {
   if (!requireNamespace('imager', quietly = TRUE)) stop('Please install package imager')
   library(imager)
@@ -166,50 +226,7 @@ import_image_gray <- function(path, target_dim = NULL) {
   mat
 }
 
-# -------------------- Examples & Demonstration --------------------
-# Example 1: PCR on simulated regression
-example_pcr <- function() {
-  dat <- simulate_regression(n = 200, p = 50, s = 5, sigma = 1, seed = 123)
-  res <- pcr_example(dat$X, dat$y, ncomp = 15)
-  yhat <- pcr_predict(res, dat$X)
-  cat('PCR chosen ncomp:', res$ncomp_opt, '
-')
-  cat('PCR MSE:', mse(dat$y, yhat), '
-')
-  invisible(list(dat = dat, res = res, yhat = yhat))
-}
-
-# Example 2: LASSO via glmnet
-example_lasso <- function() {
-  dat <- simulate_regression(n = 200, p = 50, s = 5, sigma = 1, seed = 42)
-  res <- lasso_glmnet(dat$X, dat$y, nfolds = 5)
-  yhat <- as.numeric(predict_lasso_glmnet(res, dat$X))
-  cat('glmnet lambda.min:', res$lambda_min, '
-')
-  cat('LASSO MSE:', mse(dat$y, yhat), '
-')
-  cat('Nonzero coefficients:', sum(abs(res$beta) > 1e-8), '
-')
-  invisible(list(dat = dat, res = res, yhat = yhat))
-}
-
-# Example 3: Group LASSO via gglasso
-example_group_lasso <- function() {
-  dat <- simulate_regression(n = 200, p = 60, s = 6, sigma = 1, seed = 7)
-  groups <- rep(1:(60/3), each = 3)
-  res <- group_lasso_gglasso(dat$X, dat$y, groups = groups, nfolds = 5)
-  yhat <- as.numeric(predict_group_gglasso(res, dat$X))
-  cat('gglasso lambda.min:', res$lambda_min, '
-')
-  cat('Group LASSO MSE:', mse(dat$y, yhat), '
-')
-  cat('Nonzero groups:', length(unique(groups)[sapply(unique(groups), function(g) any(abs(res$beta[groups==g])>1e-8))]), '
-')
-  invisible(list(dat = dat, res = res, yhat = yhat))
-}
-
-# Example 4: Fused LASSO on simulated image + optional import
-example_fused_lasso <- function(simulate = TRUE, img_path = NULL, nr = 64, nc = 64, lambda = NULL) {
+example_fused_lasso <- function(simulate = TRUE, img_path = NULL, nr = 64, nc = 64, lambda = 0) {
   if (simulate) {
     # synthetic piecewise constant image + noise
     img <- matrix(0, nr, nc)
@@ -231,21 +248,100 @@ example_fused_lasso <- function(simulate = TRUE, img_path = NULL, nr = 64, nc = 
   invisible(list(y = y, denoised = res$x_img, res = res))
 }
 
-# -------------------- Run examples in Colab ------------------------
-# Example usage in Colab (R kernel):
-# source('PCR_LASSO_GroupFused_R.R')
-example_pcr()
-example_lasso()
-example_group_lasso()
-example_fused_lasso(simulate = TRUE)
-# To denoise your own image (after uploading or mounting Drive):
-# example_fused_lasso(simulate = FALSE, img_path = 'your_image.jpg', nr = 128, nc = 128)
+model=example_fused_lasso(simulate = TRUE)
 
-# Notes & suggestions:
-# - glmnet and gglasso perform standardization internally but you can pre-scale if desired.
-# - genlasso may produce many lambda values; choose the index or lambda based on visual inspection
-#   or by cross-validated heuristics (not shown here due to complexity of CV for fused lasso).
-# - For very large images, building the 2D D matrix can be memory intensive; consider processing
-#   patches or using specialized TV denoising libraries.
+# -------------------- Principal Component Regression --------------
+# Uses pls::pcr which has internal cross-validation
+Data_generation <- function(n = 200, p = 20, s = 7, sigma = 1, seed = 1, rho = 0.8) {
+  # rho = correlation between predictors (0 = independent, 1 = perfectly collinear)
+  set.seed(seed)
 
-# End of file
+  # Step 1: Build a correlation (covariance) matrix
+  Sigma <- matrix(rho, nrow = p, ncol = p)  # common correlation
+  diag(Sigma) <- 1
+
+  # Step 2: Make column variances unequal
+  col_sds <- exp(seq(log(0.5), log(2.5), length.out = p))  # geometric sequence of std devs
+  Sigma <- diag(col_sds) %*% Sigma %*% diag(col_sds)       # apply unequal variances
+
+  # Step 3: Generate correlated predictors
+  L <- chol(Sigma)                       # Cholesky decomposition
+  Z <- matrix(rnorm(n * p), n, p)        # independent standard normals
+  X <- Z %*% L                           # correlated, scaled predictors
+
+  # Step 4: Define true coefficients (same pattern)
+  beta_vec <- rep(0, p)
+  beta_vec[1:s] <- seq(from = 2, length.out = s, by = -0.3)
+
+  # Step 5: Generate response with noise
+  y <- as.numeric(X %*% beta_vec + rnorm(n, sd = sigma))
+
+  list(X = X, y = y, beta = beta_vec, col_sds = col_sds, rho = rho)
+}
+pcr_example <- function(X, y, ncomp = 10, validation = "CV") {
+  if (!requireNamespace('pls', quietly = TRUE)) stop('Install package pls')
+  library(pls)
+  # prepare data.frame: use a named response so formula works cleanly
+  df <- as.data.frame(X)
+  df$.y_for_pcr <- as.numeric(y)
+
+  # center & scale performed inside pcr if scale = TRUE
+  fit <- pcr(.y_for_pcr ~ ., ncomp = ncomp, data = df, scale = TRUE, validation = validation)
+
+  # choose ncomp by CV
+  cv <- RMSEP(fit)
+  rm_vals <- as.numeric(cv$val[1,1, ])   # RMSEP for 0..ncomp
+  # pick minimum CV (ignoring "adj" components if present)
+  ncomp_opt <- which.min(rm_vals) - 1 # RMSEP returns with 0 comps at index 1
+  if (ncomp_opt < 1) ncomp_opt <- 1
+
+  # --- proportion variance explained in X by first ncomp_opt PCs (scale matches pcr)
+  pc <- prcomp(X, center = TRUE, scale. = TRUE)
+  var_explained <- (pc$sdev^2) / sum(pc$sdev^2)       # proportion per PC
+  cum_var_expl <- cumsum(var_explained)               # cumulative
+  prop_var_explained <- cum_var_expl[ncomp_opt]       # proportion explained by chosen PCs
+
+  list(fit = fit,
+       ncomp_opt = ncomp_opt,
+       rm_vals = rm_vals,
+       prop_var_explained = prop_var_explained,
+       var_explained = var_explained,
+       cum_var_expl = cum_var_expl)
+}
+
+pcr_predict <- function(pcr_obj, Xnew) {
+  preds <- predict(pcr_obj$fit, newdata = as.data.frame(Xnew), ncomp = pcr_obj$ncomp_opt)
+  as.numeric(preds)
+}
+
+if (!exists("Data_generation")) {
+  Data_generation <- function(n = 200, p = 20, s = 7, sigma = 1, seed = 1) {
+    set.seed(seed)
+    X <- matrix(rnorm(n * p), n, p)
+    beta <- rep(0, p)
+    beta[1:s] <- seq(from = 2, length.out = s, by = -0.3)
+    y <- as.numeric(X %*% beta + rnorm(n, sd = sigma))
+    list(X = X, y = y, beta = beta)
+  }
+}
+
+dat <- Data_generation(n=500, p=20, s=8, sigma=1, seed=7)
+model_pcr <- pcr_example(dat$X, dat$y, ncomp = 9, validation = "CV")
+yhat <- pcr_predict(model_pcr, dat$X)
+mse_pcr <- mse(yhat, dat$y)
+
+cat("Training MSE:", round(mse_pcr, 6), "\n")
+cat("Proportion of predictor variance explained by", model_pcr$ncomp_opt, "PC(s):",
+    round(model_pcr$prop_var_explained, 4), "\n\n")
+
+# cumulative variance explained plot
+op <- par(no.readonly = TRUE)
+par(mfrow = c(1,1))
+plot(seq_along(model_pcr$cum_var_expl), model_pcr$cum_var_expl, type = "b",
+     xlab = "Number of PCs", ylab = "Cumulative proportion variance explained",
+     main = "PCA: cumulative variance explained")
+abline(h = model_pcr$prop_var_explained, col = "blue", lty = 2)
+text(model_pcr$ncomp_opt, model_pcr$prop_var_explained,
+     labels = paste0("PCs=", model_pcr$ncomp_opt, " -> ", round(model_pcr$prop_var_explained,3)),
+     pos = 3, col = "blue")
+par(op)
